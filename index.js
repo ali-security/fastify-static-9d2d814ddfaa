@@ -185,6 +185,29 @@ async function fastifyStatic (fastify, opts) {
   const allowedPath = opts.allowedPath
 
   /**
+   * @param {import("fastify").FastifyReply} reply
+   * @param {string} pathname
+   * @return {Promise<boolean>}
+   */
+  async function sendDirectoryList (reply, pathname) {
+    const dir = dirList.path(opts.root, pathname)
+    if (!dir) {
+      return false
+    }
+
+    await dirList.send({
+      reply,
+      dir,
+      options: opts.list,
+      route: pathname,
+      prefix,
+      dotfiles: opts.dotfiles
+    }).catch((err) => reply.send(err))
+
+    return true
+  }
+
+  /**
    * @param {import("fastify").FastifyRequest} request
    * @param {import("fastify").FastifyReply} reply
    * @param {string} pathname
@@ -304,15 +327,7 @@ async function fastifyStatic (fastify, opts) {
           (!options.index || !options.index.length) &&
           pathnameForSend[pathnameForSend.length - 1] === '/'
         ) {
-          if (opts.list) {
-            await dirList.send({
-              reply,
-              dir: dirList.path(opts.root, pathname),
-              options: opts.list,
-              route: pathname,
-              prefix,
-              dotfiles: opts.dotfiles
-            }).catch((err) => reply.send(err))
+          if (opts.list && await sendDirectoryList(reply, pathname)) {
             return
           }
         }
@@ -337,15 +352,7 @@ async function fastifyStatic (fastify, opts) {
           }
 
           // if file exists, send real file, otherwise send dir list if name match
-          if (opts.list && dirList.handle(pathname, opts.list)) {
-            await dirList.send({
-              reply,
-              dir: dirList.path(opts.root, pathname),
-              options: opts.list,
-              route: pathname,
-              prefix,
-              dotfiles: opts.dotfiles
-            }).catch((err) => reply.send(err))
+          if (opts.list && dirList.handle(pathname, opts.list) && await sendDirectoryList(reply, pathname)) {
             return
           }
 
